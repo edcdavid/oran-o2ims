@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
-
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -4808,3 +4809,203 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		Expect(policyTimedOut).To(BeFalse())
 	})
 })
+
+func TestBuildPoliciesEventHistory(t *testing.T) {
+	type args struct {
+		policies *policiesv1.PolicyList
+	}
+	tests := []struct {
+		name  string
+		args  args
+		wantH utils.EventHistory
+	}{
+		{
+			name: "ok",
+			args: args{
+				policies: &policiesv1.PolicyList{
+					Items: []policiesv1.Policy{
+						// policy 1
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "policy1",
+								Namespace: "namespace1",
+							},
+							Spec: policiesv1.PolicySpec{
+								RemediationAction: "enforce",
+							},
+							Status: policiesv1.PolicyStatus{
+								ComplianceState: "NonCompliant",
+								Details: []*policiesv1.DetailsPerTemplate{
+									{
+										TemplateMeta: metav1.ObjectMeta{Name: "template1"},
+										History: []policiesv1.ComplianceHistory{
+											{
+												LastTimestamp: metav1.Date(2024,
+													10,
+													18,
+													10,
+													59,
+													21,
+													0,
+													time.Local),
+												Message: "NonCompliant;",
+											},
+										},
+									},
+								},
+							},
+						},
+						// policy 2
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "policy2",
+								Namespace: "namespace1",
+							},
+							Spec: policiesv1.PolicySpec{
+								RemediationAction: "enforce",
+							},
+							Status: policiesv1.PolicyStatus{
+								ComplianceState: "NonCompliant",
+								Details: []*policiesv1.DetailsPerTemplate{
+									{
+										TemplateMeta: metav1.ObjectMeta{Name: "template1"},
+										History: []policiesv1.ComplianceHistory{
+											{
+												LastTimestamp: metav1.Date(2024,
+													10,
+													18,
+													10,
+													59,
+													21,
+													0,
+													time.Local),
+												Message: "NonCompliant;",
+											},
+										},
+									},
+								},
+							},
+						},
+						// policy 3
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "policy3",
+								Namespace: "namespace1",
+							},
+							Spec: policiesv1.PolicySpec{
+								RemediationAction: "enforce",
+							},
+							Status: policiesv1.PolicyStatus{
+								ComplianceState: "Compliant",
+								Details: []*policiesv1.DetailsPerTemplate{
+									{
+										TemplateMeta: metav1.ObjectMeta{Name: "template2"},
+										History: []policiesv1.ComplianceHistory{
+											{
+												LastTimestamp: metav1.Date(2024,
+													10,
+													18,
+													10,
+													59,
+													21,
+													0,
+													time.Local),
+												Message: "Compliant;",
+											},
+										},
+									},
+								},
+							},
+						},
+						// policy 4
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "policy4",
+								Namespace: "namespace1",
+							},
+							Spec: policiesv1.PolicySpec{
+								RemediationAction: "enforce",
+							},
+							Status: policiesv1.PolicyStatus{
+								ComplianceState: "Pending",
+								Details: []*policiesv1.DetailsPerTemplate{
+									{
+										TemplateMeta: metav1.ObjectMeta{Name: "template2"},
+										History: []policiesv1.ComplianceHistory{
+											{
+												LastTimestamp: metav1.Date(2024,
+													10,
+													18,
+													10,
+													59,
+													21,
+													0,
+													time.Local),
+												Message: "Pending;",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantH: utils.EventHistory{
+				History: []*utils.Event{
+					{
+						ObjectID: "policy1.template1", Timestamp: time.Date(2024,
+							10,
+							18,
+							10,
+							59,
+							21,
+							0,
+							time.Local),
+						State: "InProgress",
+					},
+					{
+						ObjectID: "policy2.template1", Timestamp: time.Date(2024,
+							10,
+							18,
+							10,
+							59,
+							21,
+							0,
+							time.Local),
+						State: "InProgress",
+					},
+					{
+						ObjectID: "policy3.template2", Timestamp: time.Date(2024,
+							10,
+							18,
+							10,
+							59,
+							21,
+							0,
+							time.Local),
+						State: "Completed",
+					},
+					{
+						ObjectID: "policy4.template2", Timestamp: time.Date(2024,
+							10,
+							18,
+							10,
+							59,
+							21,
+							0,
+							time.Local),
+						State: "InProgress",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if gotH := BuildPoliciesEventHistory(tt.args.policies); !reflect.DeepEqual(gotH, tt.wantH) {
+				t.Errorf("BuildPoliciesEventHistory() = %v, want %v", gotH, tt.wantH)
+			}
+		})
+	}
+}

@@ -2617,20 +2617,13 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-const (
-	// Policy Specific states
-	compliant    = "Compliant"
-	nonCompliant = "NonCompliant"
-	pending      = "Pending"
-)
-
 // BuildPoliciesEventHistory creates an EventHistory object from a policyList
 func BuildPoliciesEventHistory(policies *policiesv1.PolicyList) (h utils.EventHistory) {
 	for _, policy := range policies.Items {
 		for _, detailsPerTemplate := range policy.Status.Details {
 			templateFullName := policy.Name + "." + detailsPerTemplate.TemplateMeta.Name
 			for _, complianceHistory := range detailsPerTemplate.History {
-				if strings.HasPrefix(complianceHistory.Message, compliant) {
+				if strings.HasPrefix(complianceHistory.Message, string(policiesv1.Compliant)) {
 					item := utils.Event{
 						ObjectID:  templateFullName,
 						Timestamp: complianceHistory.LastTimestamp.Time,
@@ -2638,7 +2631,7 @@ func BuildPoliciesEventHistory(policies *policiesv1.PolicyList) (h utils.EventHi
 					}
 					h.History = append(h.History, &item)
 				}
-				if strings.HasPrefix(complianceHistory.Message, pending) {
+				if strings.HasPrefix(complianceHistory.Message, string(policiesv1.Pending)) {
 					item := utils.Event{
 						ObjectID:  templateFullName,
 						Timestamp: complianceHistory.LastTimestamp.Time,
@@ -2646,7 +2639,7 @@ func BuildPoliciesEventHistory(policies *policiesv1.PolicyList) (h utils.EventHi
 					}
 					h.History = append(h.History, &item)
 				}
-				if strings.HasPrefix(complianceHistory.Message, nonCompliant) {
+				if strings.HasPrefix(complianceHistory.Message, string(policiesv1.NonCompliant)) {
 					item := utils.Event{
 						ObjectID:  templateFullName,
 						Timestamp: complianceHistory.LastTimestamp.Time,
